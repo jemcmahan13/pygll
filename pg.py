@@ -56,6 +56,7 @@ class Nonterminal(GrammarTerm):
         self._follow = set()
         self.compiled = False
         self.top = False
+        self.rules = []  # will eventually hold tuples of (first-set, production) for parsing
 
     def addProduction(self, prod):
         self.productions.append(prod)
@@ -173,9 +174,14 @@ class Production(object):
         self.last = len(self.prod) - last
 
     def compile(self):
+        # Do some booking needed before follow sets can be computed, and build
+        # a map of terminal_list -> production
         if self.compiled:
             return
         self.compiled = True
+
+        self.head.rules.append((self.first, self))
+
         if not self.prod[0]:
             return  # epsilon
         self.updateEnds()
@@ -193,6 +199,97 @@ class Production(object):
 
     def __str__(self):
         return "{} => {}".format(self.head, ' '.join(map(str, self.prod)))
+
+
+class Parser(object):
+
+    class ScanError(Exception):
+        pass
+    class ParseError(Exception):
+        pass
+    def parsefail(self, expected, found, val=None):
+        raise Parser.ParseError("Parse Error, line {}: Expected token {}, but found token {}:{}".\
+            format(self.line, expected, found, val))
+    def scanfail(self):
+        raise Parser.ScanError("Lexer Error, line {}: No matching token found. Remaining input: {}"\
+            .format(self.line, self.remaining[:50]))
+
+
+    def __init__(self, lexerMap, s):
+        # Intialize with an ordered list containint tuples (regex, name) defining
+        # the language's tokens, and a string s to parse.
+        # Tokenization occurs in the order given: the most specific tokens (keywords)
+        # should be earlier in the list.
+        rules = [ (p, self.makeHandler(t)) for p,t in Parser.rules ]
+        self.scanner = re.Scanner(rules)
+        self.s = s
+        self.line = 1
+        self.log = log
+
+        self.toks, self.remaining = self.scanner.scan(self.s)
+        self.trim()
+
+    def makeHandler(self, token):
+        return lambda scanner, string : (token, string)
+
+    def trim(self):
+        if self.toks:
+            token, match = self.toks[0]
+            if token == "whitespace":
+                self.line += match.count('\n')
+                self.toks.pop(0)
+                self.trim()
+
+    def next(self):
+        if self.toks:
+            token,match = self.toks[0]
+            return token
+        elif self.remaining:
+            self.scanfail()
+
+    def consume(self, tok):
+        token,match = self.toks.pop(0)
+        if tok != token:
+            self.parsefail(tok, token, match)
+        if self.log:
+            print("consuming {}:{}".format(tok, match))
+        self.trim()
+        return match
+
+    def pop(self):
+        return self.consume(self.next())
+
+    def parse(rule):
+        # Parse input according to a given Nonterminal object.
+        # rule = { Token list : list of terms }
+        for rule in rule.rules:
+            for tok in rule[0]:
+                if tok(self.next()):  # match
+                    self.consume(tok.name)
+                    production = rule[1]
+                    for term in production.prods:
+                        # NTS - make production iterable
+                        if isinstance(term, Terminal):
+                            self.consume(term.name)
+                        else:
+                            self.parse(term)
+
+
+        # rules = rule.rules  # get the list of tuples
+        # firstlist = [ x[0] for x in rules ]  # list of firsts for each production
+        #
+        # while True:
+        #     common = rules[0][0]  # find if all rules have something in common
+        #     _ = [ common.intersection_update(x) for x in  ]
+        #     if common:  # there are some tokens in common with all remaining rules
+        #         # parse the common tokens
+        #         for tok in common:
+        #             if tok(self.next()):
+        #                 self.consume(tok.name)
+        #                 break  # now loop
+        #     else:  # there are no tokens common to all rules; eliminate some
+        #         for rule in rules:
+        #             if rule[0]()
 
 
 # Test grammar
@@ -223,5 +320,6 @@ E.root()  # declare root production
 
 for x in (E, Ep, T, Tp, F):
     #print('---->', x, x.endOf, x.followers)
-    print(x, x.follow)
+    #print(x, x.follow)
     #print(x.follow)
+    print(x, x.first)
