@@ -1,5 +1,6 @@
-import re
+import re, sys
 
+#log = True
 log = False
 
 class GrammarTerm(object):
@@ -40,6 +41,12 @@ class Terminal(GrammarTerm):
 
     def compile(self, caller=None):
         return
+
+    def __call__(self, token):
+        # See if the given token matches this terminal
+        if log:
+            print("Checking token ", token, "against ", self.name)
+        return self.name == token
 
     def __str__(self):
         return "{}".format(self.name)
@@ -94,7 +101,12 @@ class Nonterminal(GrammarTerm):
         # This nonterminal is the top level (start) symbol
         # Add EOF to its follow set
         # print("Root called on ", self)
-        self.top = True
+        try:
+            self.compile()
+            self.top = True
+        except RecursionError as e:
+            print("RecursionError: Are you sure your grammar has no left-recursion?")
+            sys.exit(1)
 
     def compile(self, caller=None):
         if self.compiled:
@@ -211,16 +223,17 @@ class Parser(object):
         raise Parser.ParseError("Parse Error, line {}: Expected token {}, but found token {}:{}".\
             format(self.line, expected, found, val))
     def scanfail(self):
-        raise Parser.ScanError("Lexer Error, line {}: No matching token found. Remaining input: {}"\
+        raise Parser.ScanError("Lexer Error, line {}: No matching token found. Remaining input: {} ...."\
             .format(self.line, self.remaining[:50]))
 
 
     def __init__(self, lexerMap, s):
-        # Intialize with an ordered list containint tuples (regex, name) defining
+        # Intialize with an ordered list containint tuples (name, regex) defining
         # the language's tokens, and a string s to parse.
         # Tokenization occurs in the order given: the most specific tokens (keywords)
         # should be earlier in the list.
-        rules = [ (p, self.makeHandler(t)) for p,t in Parser.rules ]
+        lex = [('whitespace', '\s+'),] + [ x for x in lexerMap ]
+        rules = [ (regex, self.makeHandler(tokenName)) for tokenName, regex in lex ]
         self.scanner = re.Scanner(rules)
         self.s = s
         self.line = 1
@@ -239,6 +252,9 @@ class Parser(object):
                 self.line += match.count('\n')
                 self.toks.pop(0)
                 self.trim()
+            # else:
+            #     if log:
+            #         print("next token is ", token)
 
     def next(self):
         if self.toks:
@@ -248,31 +264,51 @@ class Parser(object):
             self.scanfail()
 
     def consume(self, tok):
+        if not self.toks and self.remaining:
+            self.scanfail()
         token,match = self.toks.pop(0)
-        if tok != token:
-            self.parsefail(tok, token, match)
         if self.log:
             print("consuming {}:{}".format(tok, match))
+        if tok != token:
+            self.parsefail(tok, token, match)
         self.trim()
         return match
 
     def pop(self):
         return self.consume(self.next())
 
-    def parse(rule):
+    def parse(self, nonterminal):
         # Parse input according to a given Nonterminal object.
-        # rule = { Token list : list of terms }
-        for rule in rule.rules:
-            for tok in rule[0]:
+        # nonterminal: [ (tokens, Production) ]
+        if log:
+            print("Parsing nonterminal ", nonterminal)
+        epsilon = False
+        for rule in nonterminal.rules:
+            if log:
+                print("checking ", rule[1])
+            epsilon |= None in rule[0]
+            firsts = rule[0].difference(set((None,)))
+            for tok in firsts:
+                #print("checking token", tok)
                 if tok(self.next()):  # match
-                    self.consume(tok.name)
+                    if log:
+                        print("Match")
+                    #self.consume(tok.name)
                     production = rule[1]
-                    for term in production.prods:
+                    terms = []
+                    for term in production.prod:
                         # NTS - make production iterable
                         if isinstance(term, Terminal):
-                            self.consume(term.name)
+                            terms.append(self.consume(term.name))
                         else:
-                            self.parse(term)
+                            terms.append(self.parse(term))
+                    return terms
+        if epsilon:
+            if log:
+                print("Taking epsilon")
+            return []
+        else:
+            self.parsefail(' or '.join([str([ x.name for x in r[0] if x]) for r in nonterminal.rules]), self.next())
 
 
         # rules = rule.rules  # get the list of tuples
@@ -291,35 +327,140 @@ class Parser(object):
         #         for rule in rules:
         #             if rule[0]()
 
+def ebnf():
 
-# Test grammar
-# Declare Nonterminals and Terminals
-E = Nonterminal("E")
-Ep = Nonterminal("E'")
-T = Nonterminal("T")
-Tp = Nonterminal("T'")
-F = Nonterminal("F")
-plus = Terminal('plus', r'\+')
-mult = Terminal('mult', r'\*')
-name = Terminal('name', r'\w+')
-lparen = Terminal('lapren', r'\(')
-rparen = Terminal('rparen', r'\)')
+    # Declare Nonterminals
+    Decls = Nonterminal("Decls")
+    Decl = Nonterminal("Decl")
+    Term = Nonterminal("Term")
+    Terms = Nonterminal("Terms")
+    Alt = Nonterminal("Alt")
+    Alts = Nonterminal("Alts")
+    Binding = Nonterminal("Binding")
+    Names = Nonterminal("Names")
 
-# Declare Productions
-E1 = Production(E, T, Ep)
-Ep1 = Production(Ep, plus, T, Ep)
-Ep2 = Production(Ep, None)
-T1 = Production(T, F, Tp)
-Tp1 = Production(Tp, mult, F, Tp)
-Tp2 = Production(Tp, None)
-F1 = Production(F, lparen, E, rparen)
-F2 = Production(F, name)
+    # make terminals and lex map
+    def makeTerminals(lex, *args):
+        terms = []
+        while args:
+            name = args[0]
+            regex = args[1]
+            args = args[2:]
+            terms.append(Terminal(name, regex))
+            lex.append((name, regex))
+        return terms
 
-E.compile()  # must call before doing follow sets
-E.root()  # declare root production
+    lex = []
+    equals, pound, epsilon, semicolon, bar, string, name = makeTerminals(lex, 'equals', r':=',
+                                                                              'pound', r'\#',
+                                                                              'epsilon', '\$',
+                                                                              'semicolon', r';',
+                                                                              'bar', r'\|',
+                                                                              'string', r'(\"|\').*?\1',
+                                                                              'name', r'\w+')
 
-for x in (E, Ep, T, Tp, F):
-    #print('---->', x, x.endOf, x.followers)
-    #print(x, x.follow)
-    #print(x.follow)
-    print(x, x.first)
+    # Declare productions
+    Decls1 = Production(Decls, Decl, Decls)
+    Decls2 = Production(Decls, None)
+    Decl1 = Production(Decl, name, equals, Alt, Alts, Binding, semicolon)
+    Alt1 = Production(Alt, Term, Terms, Binding)
+    Alts1 = Production(Alts, bar, Alt, Alts)
+    Alts2 = Production(Alts, None)
+    Term1 = Production(Term, name)
+    Term2 = Production(Term, string)
+    Terms1 = Production(Terms, Term, Terms)
+    Terms2 = Production(Terms, None)
+    Binding1 = Production(Binding, pound, name, Names)
+    Binding2 = Production(Binding, None)
+    Names1 = Production(Names, name, Names)
+    Names2 = Production(Names, None)
+
+    Decls.root()
+
+    ebnfgrammar='''
+    Decls := Decl Decls | '$';
+    Decl := Name ':=' Alt Alts ';';
+    Alt := Term Terms Binding;
+    Alts := '|' Alt Alts | '$';
+    Term := name | string;
+    Terms := Term Terms | '$';
+    Binding := '#' Name Names | '$';
+    Names := Name Names | '$';
+    '''
+
+    p = Parser(lex, ebnfgrammar)
+    # print(p.toks, p.s)
+    print(p.parse(Decls))
+
+
+
+def simpletest():
+    # Test grammar
+    # Declare Nonterminals and Terminals
+    E = Nonterminal("E")
+    Ep = Nonterminal("E'")
+    T = Nonterminal("T")
+    Tp = Nonterminal("T'")
+    F = Nonterminal("F")
+    plus = Terminal('plus', r'\+')
+    mult = Terminal('mult', r'\*')
+    name = Terminal('name', r'\w')
+    num = Terminal('num', r'[0-9]+')
+    lparen = Terminal('lapren', r'\(')
+    rparen = Terminal('rparen', r'\)')
+
+    # Declare Productions
+    E1 = Production(E, T, Ep)
+    Ep1 = Production(Ep, plus, T, Ep)
+    Ep2 = Production(Ep, None)
+    T1 = Production(T, F, Tp)
+    Tp1 = Production(Tp, mult, F, Tp)
+    Tp2 = Production(Tp, None)
+    F1 = Production(F, lparen, E, rparen)
+    F2 = Production(F, num)
+
+    # Declare tokens
+    tokens = (
+    ('plus', r'\+'),
+    ('mult', r'\*'),
+    ('lapren', r'\('),
+    ('rparen', r'\)'),
+    ('num', r'[0-9]+'),
+    ('name', r'\w+'),
+    )
+
+    E.root()  # declare root production
+
+    s = '''3
+    +
+    4
+    *
+    (
+    9
+    +
+    2
+    )
+    '''
+    #
+    # for x in (E, Ep, T, Tp, F):
+    #     print(repr(x))
+    #     print(x.first, x.follow)
+
+
+
+    def printLists(l, depth=0):
+        s = ''
+        t = '\t'
+        for x in l:
+            if isinstance(x, list):
+                s += '[' + printLists(x, depth+1) +  ']'
+            else:
+                s += x
+        return "{}\n{}".format(s, t*depth)
+
+
+    p = Parser(tokens, s)
+    #print(p.toks)
+    print(printLists(p.parse(E)))
+
+ebnf()
