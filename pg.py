@@ -1,6 +1,6 @@
 import re, sys
 
-# log = True
+#log = True
 log = False
 
 class GrammarTerm(object):
@@ -138,6 +138,8 @@ class Production(object):
         self.head = head
         self.head.addProduction(self)
         self.compiled = False
+
+        #print(head, type(head), args, [type(x) for x in args])
 
         # Note which terms follow which
         for i,arg in enumerate(args):
@@ -642,14 +644,15 @@ class Parser(object):
 '''
 
 class Emitter(object):
-    def __init__(self, tree, root):#, grammar):
+    def __init__(self, tree, start):#, grammar):
         # self.head = grammar;
         self.s = HEADER
         self.tree = tree  # parse tree made of lists
-        # self.root = root  # root grammar rule
-        self.parser = ''
+        self.start = start  # root grammar rule
+        self.parser = ''  # build up parser classes/functions here
         self.tokenmap = {}  # maps string to Terminal object
         self.namemap = {}  # maps string to Nonterminal object
+        self.lexmap = []  # (name, regex) pairs for lexer
 
         # self.initgrammar()
 
@@ -680,10 +683,11 @@ class Emitter(object):
     def emitdecl(self, decl):
         name = decl[1]
         rhs = decl[3:]
+        #print(name, rhs)
         alt = rhs[0]
         alts = rhs[1]
-        # print(alts)
 
+        #print(name, alt)
         prods = [self.emitalt(name, alt),]
         while alts:
             rhs = alts[2:]
@@ -696,34 +700,43 @@ class Emitter(object):
         return prods
 
     def emitalt(self, name, alt):
+        #print("alt", name, alt, len(alt))
         prod = alt[0]
         term = alt[1]
         terms = alt[2]
         binding = alt[3]
 
+        #print(name, term)
+        
         args = [self.emitterm(term),]
-        while terms:
+        while len(terms) > 1:
             args.append(self.emitterm(terms[1]))
-            terms = term[2]
+            terms = terms[2]
 
         # if not binding:
             # return
         # names = self.getbinding(binding)
 
+        #print(args)
+        
         for arg in args:
             if arg[0] in ("'", "\""):
-                if any([x(arg) for x in self.tokenmap]):
+                if any([x(arg) for x in self.tokenmap.values()]):
                     continue
                 else:
                     self.tokenmap[arg] = Terminal(arg, arg)
-            else:  # nonterminal
-                if arg not in self.namemap:
+                    self.lexmap.append(arg, arg)
+            else:  # name
+                if any([x(arg) for x in self.tokenmap.values()]):  # see if name is token
+                    continue
+                if arg not in self.namemap:  # otherwise, it's a nonterminal
                     self.namemap[arg] = Nonterminal(arg)
 
         return (name, args)
 
     def emitterm(self, term):
-        pass
+        obj = term[1]
+        return obj
 
         # print(name, names)
 
@@ -761,14 +774,32 @@ class Emitter(object):
         else:
             return [name, ]
 
-    def emit(self):
+    def gettokens(self, toktree):
+        pairs = toktree[2]
 
+        while pairs:
+            name = pairs[1]
+            regex = pairs[2]
+            pairs = pairs[3]
+            self.tokenmap[name] = Terminal(name, regex)
+            self.lexmap.append((name, regex))
+        
+    def emit(self):
+        #print("emit", self.tree)
 
         tree = self.tree
+        toktree = tree[1]
+        grammars = tree[2]
+        assert(toktree[1] == "%tokens")
+        assert(grammars[1] == "%grammar")
+        self.gettokens(toktree)
+
+        tree = grammars[2]
+        
         prods = []
         while tree:
             # print(tree)
-            prods.append(self.emitdecl(tree[1]))
+            prods += self.emitdecl(tree[1])
             tree = tree[2]
 
         # Now that all terminal and nonterminals seen and created, instantiate productions
@@ -776,8 +807,13 @@ class Emitter(object):
         allmap.update(self.tokenmap)
         for name, args in prods:
             Production(self.namemap[name], *[allmap[x] for x in args])
+            
+        def buildandparse(s):
+            p = Parser(self.lexmap, s)
+            p.parse(self.namemap[self.start])
 
-
+        return buildandparse
+            
 
     def emitfunc(self, nonterm):
         s = ''
@@ -816,6 +852,10 @@ def fname(name):
 def ebnf():
 
     # Declare Nonterminals
+    Spec = Nonterminal("Spec")
+    TokenDecl = Nonterminal("TokenDecl")
+    TokenPairs = Nonterminal("TokenPairs")
+    GrammarDecl = Nonterminal("GrammarDecl")
     Decls = Nonterminal("Decls")
     Decl = Nonterminal("Decl")
     Term = Nonterminal("Term")
@@ -837,11 +877,16 @@ def ebnf():
         return terms
 
     lex = []
-    equals, pound, epsilon, semicolon, bar, tokendecl, grammardecl, string, name = makeTerminals(
+    equals, pound, epsilon, semicolon, bar, tokenkw, grammarkw, string, name = makeTerminals(
     lex, 'equals', r':=', 'pound', r'\#', 'epsilon', '\$', 'semicolon', r';', 'bar', r'\|',\
-    'tokendecl', r'%tokens', 'grammardecl', r'%grammar', 'string', r'(\"|\').*?\1', 'name', r'\w+')
+    'tokenkw', r'\%tokens', 'grammarkw', r'%grammar', 'string', r'(\"|\').*?\1', 'name', r'\w+')
 
     # Declare productions
+    Spec1 = Production(Spec, TokenDecl, GrammarDecl)
+    TokenDecl1 = Production(TokenDecl, tokenkw, TokenPairs)
+    TokenPairs1 = Production(TokenPairs, name, string, TokenPairs)
+    TokenPairs2 = Production(TokenPairs, None)
+    GrammarDecl1 = Production(GrammarDecl, grammarkw, Decls)
     Decls1 = Production(Decls, Decl, Decls)
     Decls2 = Production(Decls, None)
     Decl1 = Production(Decl, name, equals, Alt, Alts, Binding, semicolon)
@@ -858,7 +903,7 @@ def ebnf():
     Names1 = Production(Names, name, Names)
     Names2 = Production(Names, None)
 
-    Decls.root()
+    Spec.root()
 
     ebnfgrammar='''
     Spec := TokenDecl GrammarDecl
@@ -953,12 +998,24 @@ def ebnf():
     # e = Emitter(s, Decls)
 
     p = Parser(lex, mathgrammar)
-    s = p.parse(Decls)
-    # print(s)
-    e = Emitter(s, E)
+    s = p.parse(Spec)
+    #print(s)
+    e = Emitter(s, 'E')
 
-    e.emit()
-    print(e.parser)
+    parse = e.emit()
+
+    s = '''3
+    +
+    4
+    *
+    (
+    9
+    +
+    2
+    )
+    '''
+    
+    print(parse(s))
 
 def simpletest():
     # Test grammar
