@@ -1,0 +1,43 @@
+%root Spec
+%tokens
+pound "#"
+bar '\|'
+epsilon "\$"
+string "(\\'|\\").*?[^\\\\]\\1"
+name "\w+"
+%grammar
+
+Spec := RootDecl TokenDecl GrammarDecl
+      ;
+RootDecl := '%root' name
+          ;
+TokenDecl := '%tokens' TokenPairs
+           ;
+TokenPairs := name string TokenPairs
+            | $
+            ;
+GrammarDecl := '%grammar' Decls
+             ;
+Decls := Decl Decls              # Declarations decl rest
+       | $
+       ;
+Decl := name ':=' Alt Alts ';'  # Declaration dname _ alt alts _
+      ;
+Alt := Term Terms Binding       # Alternative term terms bind
+     | epsilon                  # _
+     ;
+Alts := bar Alt Alts             # Alternatives _ alt alts
+      | $
+      ;
+Term := name                     # Name val
+      | string                  # String val
+      ;
+Terms := Term Terms              # Terms term terms
+       | $
+       ;
+Binding := pound name Names        # Binding _ bname names
+         | $
+         ;
+Names := name Names              # Names termname names
+       | $
+       ;

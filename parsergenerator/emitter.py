@@ -296,7 +296,7 @@ class Emitter(object):
                 x.pclass = None
 
         # Emit lexer map
-        self.objs += "LEXMAP = {}\n\n".format(self.lexmap)
+        self.objs += "LEXMAP = {}\n\n".format(self.lexmap).replace('\\\\','\\')
 
         # Find all the nonterminals and make a parse function for each
         root = self.namemap[self.start]
@@ -429,14 +429,16 @@ class Emitter(object):
             # print(production, dir(production))
             if production.pclass:
                 binding = production.pclass
-                # attrs = map(str, zip(binding[1:], variables))
+                if binding[0] == "_":  # suppress this production
+                    s += "            return  # production suppressed\n"
+                    continue
                 attrs = zip(binding[1:], variables)
                 sargs = ''
                 for name, variable in attrs:
                     sargs += "('{}', {}),".format(name, variable)
                 s += "            return {}({})\n".format(production.pclass[0], sargs)
             else:
-                s += "            return ({},)\n".format(', '.join(variables))
+                s += "            return {}\n".format(', '.join(variables))
         if epsilon:
             s += "        return  # epsilon case\n\n"
         else:  # error case

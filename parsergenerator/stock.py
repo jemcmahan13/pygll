@@ -1,8 +1,4 @@
 PCLASS = '''
-import sys, re
-
-log = False
-
 class Parser(object):
 
     class ScanError(Exception):
@@ -20,7 +16,7 @@ class Parser(object):
         rules = [ (regex, self.makeHandler(tokenName)) for tokenName, regex in lex ]
         self.scanner = re.Scanner(rules)
         self.line = 1
-        self.log = log
+        self.log = False
 
     def parse(self, s):
         self.toks, self.remaining = self.scanner.scan(s)
@@ -37,9 +33,6 @@ class Parser(object):
                 self.line += match.count('\\n')
                 self.toks.pop(0)
                 self.trim()
-            # else:
-            #     if log:
-            #         print("next token is ", token)
 
     def next(self):
         if self.toks:
@@ -65,6 +58,8 @@ class Parser(object):
 '''
 
 GOBJ='''
+import re, sys
+
 class GrammarObj(object):
     def __str__(self):
         return self.name
@@ -83,6 +78,7 @@ class GrammarObj(object):
             else:
                 setattr(self, k, v)
         self.attrs = args
+
 '''
 
 MAIN='''
