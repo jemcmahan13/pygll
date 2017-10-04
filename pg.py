@@ -406,6 +406,11 @@ class Emitter(object):
         alt = rhs[0]
         alts = rhs[1]
 
+        if any([x(name) for x in self.tokenmap.values()]):  # see if name is token
+            pass
+        elif name not in self.namemap:  # otherwise, it's a nonterminal
+            self.namemap[name] = Nonterminal(name)
+
         #print(name, alt)
         prods = [self.emitalt(name, alt),]
         while alts:
@@ -434,6 +439,7 @@ class Emitter(object):
         else:
             bnames = None
 
+        #print (name, term)
         if not term:
             return (name, [None,], bnames)
 
@@ -443,6 +449,7 @@ class Emitter(object):
             terms = terms[2]
 
         for arg in args:
+            # print(arg)
             if arg[0] in ("'", "\""):
                 if any([x(arg) for x in self.tokenmap.values()]):
                     continue
@@ -534,8 +541,8 @@ class Emitter(object):
         allmap[None] = None  # for epsilon terms
         #print('\n'.join(map(str,prods)))
         for name, args, binding in prods:
-            #print("Generating production for", name, "with", args)
-            #print(allmap)
+            # print("Generating production for", name, "with", args)
+            # print(self.namemap)
             x = Production(self.namemap[name], *[allmap[x] for x in args])
             if binding:
                 s = ''
@@ -663,7 +670,7 @@ def ebnf():
     lex = []
     equals, pound, epsilon, semicolon, bar, rootkw, tokenkw, grammarkw, string, name = makeTerminals(
     lex, 'equals', r':=', 'pound', r'\#', 'epsilon', '\$', 'semicolon', r';', 'bar', r'\|',\
-    'rootkw', r'\%root', 'tokenkw', r'\%tokens', 'grammarkw', r'%grammar', 'string', r'(\"|\').*?\1', 'name', r'\w+')
+    'rootkw', r'\%root', 'tokenkw', r'\%tokens', 'grammarkw', r'\%grammar', 'string', r'(\"|\').*?\1', 'name', r'\w+')
 
     # Declare productions
     Spec1 = Production(Spec, RootDecl, TokenDecl, GrammarDecl)
@@ -693,7 +700,9 @@ def ebnf():
     ebnfgrammar='''
     %root Spec
     %tokens
+    name "\w+"
     %grammar
+
     Spec := RootDecl TokenDecl GrammarDecl
           ;
     RootDecl := '%root' name
@@ -708,7 +717,7 @@ def ebnf():
     Decls := Decl Decls              # Declarations decl rest
            | $
            ;
-    Decl := Name ':=' Alt Alts ';'  # Declaration name _ alt alts _
+    Decl := name ':=' Alt Alts ';'  # Declaration name _ alt alts _
           ;
     Alt := Term Terms Binding       # Alternative term terms bind
          ;
@@ -721,7 +730,7 @@ def ebnf():
     Terms := Term Terms              # Terms term terms
            | $
            ;
-    Binding := '#' Name Names        # Binding _ name names
+    Binding := '#' name Names        # Binding _ name names
              | $
              ;
     Names := name Names              # Names name names
@@ -782,11 +791,10 @@ def ebnf():
 
 
     # p = Parser(lex, ebnfgrammar)
-    p = Parser(lex, mathgrammar)
+    p = Parser(lex, ebnfgrammar)
     s = p.parse(Spec)
     #print(s)
-    e = Emitter(s, 'E')
-
+    e = Emitter(s, 'Spec')
     s = '''3
     +
     4
