@@ -26,7 +26,7 @@ Decls := Decl Decls              # Declarations decl rest
        ;
 Decl := name ':=' Alt Alts ';'  # Declaration dname _ alt alts _
       ;
-Alt := Exp Exps Binding       # Alternative term terms bind
+Alt := Exp Exps Binding       # Alternative exp exps bind
      | epsilon                  # _
      ;
 Alts := bar Alt Alts             # Alternatives _ alt alts
@@ -37,7 +37,7 @@ Exp := lrepeat Exps rrepeat     # exprepeat _ exps _
      | lopt Exps ropt           # eopt _ exps _
      | Term
      ;
-Exps := Exp Exps                # Expr exp rest
+Exps := Exp Exps                # Expr exp exps
       | $
       ;
 
