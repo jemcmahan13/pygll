@@ -1,6 +1,6 @@
-import re, sys
+from stock import GOBJ
+import re
 
-# log = True
 log = False
 
 class GrammarTerm(object):
@@ -216,134 +216,12 @@ class Production(object):
         return "{} => {}".format(self.head, ' '.join(map(str, self.prod)))
 
 
-class Parser(object):
-
-    class ScanError(Exception):
-        pass
-    class ParseError(Exception):
-        pass
-    def parsefail(self, expected, found, val=None):
-        raise Parser.ParseError("Parse Error, line {}: Expected token {}, but found token {}:{}".\
-            format(self.line, expected, found, val))
-    def scanfail(self):
-        raise Parser.ScanError("Lexer Error, line {}: No matching token found. Remaining input: {} ...."\
-            .format(self.line, self.remaining[:50]))
-
-
-    def __init__(self, lexerMap, s):
-        # Intialize with an ordered list containint tuples (name, regex) defining
-        # the language's tokens, and a string s to parse.
-        # Tokenization occurs in the order given: the most specific tokens (keywords)
-        # should be earlier in the list.
-        lex = [('whitespace', '\s+'),] + [ x for x in lexerMap ]
-        rules = [ (regex, self.makeHandler(tokenName)) for tokenName, regex in lex ]
-        self.scanner = re.Scanner(rules)
-        self.s = s
-        self.line = 1
-        self.log = log
-
-        self.toks, self.remaining = self.scanner.scan(self.s)
-        self.trim()
-
-    def makeHandler(self, token):
-        return lambda scanner, string : (token, string)
-
-    def trim(self):
-        if self.toks:
-            token, match = self.toks[0]
-            if token == "whitespace":
-                self.line += match.count('\n')
-                self.toks.pop(0)
-                self.trim()
-            # else:
-            #     if log:
-            #         print("next token is ", token)
-
-    def next(self):
-        if self.toks:
-            token,match = self.toks[0]
-            return token
-        elif self.remaining:
-            self.scanfail()
-
-    def consume(self, tok):
-        if not self.toks and self.remaining:
-            self.scanfail()
-        token,match = self.toks.pop(0)
-        if self.log:
-            print("consuming {}:{}".format(tok, match))
-        if tok != token:
-            self.parsefail(tok, token, match)
-        self.trim()
-        return match
-
-    def pop(self):
-        return self.consume(self.next())
-
-    def parse(self, nonterminal):
-        # Parse input according to a given Nonterminal object.
-        # nonterminal: [ (tokens, Production) ]
-        if log:
-            print("Parsing nonterminal ", nonterminal)
-        epsilon = False
-        for rule in nonterminal.rules:
-            if log:
-                print("checking ", rule[1])
-            epsilon |= None in rule[0]
-            firsts = rule[0].difference(set((None,)))
-            for tok in firsts:
-                #print("checking token", tok)
-                if tok(self.next()):  # match
-                    if log:
-                        print("Match")
-                    #self.consume(tok.name)
-                    production = rule[1]
-                    terms = []
-                    for term in production.prod:
-                        # NTS - make production iterable
-                        if isinstance(term, Terminal):
-                            terms.append(self.consume(term.name))
-                        else:
-                            terms.append(self.parse(term))
-                    if rule[1].pclass:  # there's a name binding for this production
-                        binding = rule[1].pclass
-                        return GrammarObj(binding[0], *zip(binding[1:], terms))
-                    else:
-                        return [rule[1],] + terms
-        if epsilon:
-            if log:
-                print("Taking epsilon")
-            return []
-        else:
-            self.parsefail(' or '.join([str([ x.name for x in r[0] if x]) for r in nonterminal.rules]), self.next())
-
-
-        # rules = rule.rules  # get the list of tuples
-        # firstlist = [ x[0] for x in rules ]  # list of firsts for each production
-        #
-        # while True:
-        #     common = rules[0][0]  # find if all rules have something in common
-        #     _ = [ common.intersection_update(x) for x in  ]
-        #     if common:  # there are some tokens in common with all remaining rules
-        #         # parse the common tokens
-        #         for tok in common:
-        #             if tok(self.next()):
-        #                 self.consume(tok.name)
-        #                 break  # now loop
-        #     else:  # there are no tokens common to all rules; eliminate some
-        #         for rule in rules:
-        #             if rule[0]()
-
-
-
-from header import PCLASS, GRAMMAROBJ, EMITTERMAIN
-
 class Emitter(object):
-    def __init__(self, tree, start):#, grammar):
+    def __init__(self, tree):#, grammar):
         self.tree = tree  # parse tree made of lists
-        self.start = start  # name of root grammar rule
+        self.start = None  # name of root grammar rule
         self.parser = ''  # build up parser classes/functions here
-        self.objs = GRAMMAROBJ  # put named class definitions here
+        self.objs = GOBJ  # put named class definitions here
         self.tokenmap = {}  # maps string to Terminal object
         self.namemap = {}  # maps string to Nonterminal object
         self.lexmap = []  # (name, regex) pairs for lexer
@@ -378,22 +256,22 @@ class Emitter(object):
         #print("emit", self.tree)
 
         tree = self.tree
-        rootdecl = tree[1]
-        toktree = tree[2]
-        grammars = tree[3]
-        assert(rootdecl[1] == "%root")
-        assert(toktree[1] == "%tokens")
-        assert(grammars[1] == "%grammar")
-        root = rootdecl[2]
+        rootdecl = tree[0]
+        toktree = tree[1]
+        grammars = tree[2]
+        assert(rootdecl[0] == "%root")
+        assert(toktree[0] == "%tokens")
+        assert(grammars[0] == "%grammar")
+        root = rootdecl[1]
         self.gettokens(toktree)
 
-        tree = grammars[2]
+        tree = grammars[1]
+        self.start = tree.decl.dname  # save root rule for parsing
 
         prods = []
         while tree:
-            # print(tree)
-            prods += self.emitdecl(tree[1])
-            tree = tree[2]
+            prods += self.emitdecl(tree.decl)
+            tree = tree.rest
 
         # Now that all terminal and nonterminals seen and created, instantiate productions
         allmap = self.namemap.copy()
@@ -433,11 +311,9 @@ class Emitter(object):
         self.parser += s
 
     def emitdecl(self, decl):
-        name = decl[1]
-        rhs = decl[3:]
-        #print(name, rhs)
-        alt = rhs[0]
-        alts = rhs[1]
+        name = decl.dname
+        alt = decl.alt
+        alts = decl.alts
 
         if any([x(name) for x in self.tokenmap.values()]):  # see if name is token
             pass
@@ -447,25 +323,19 @@ class Emitter(object):
         #print(name, alt)
         prods = [self.emitalt(name, alt),]
         while alts:
-            #print("alts", alts)
-            rhs = alts[2:]
-            alt = rhs[0]
-            prods.append(self.emitalt(name, rhs[0]))
-            alts = rhs[1]
+            prods.append(self.emitalt(name, alts.alt))
+            alts = alts.alts
 
         return prods
 
     def emitalt(self, name, alt):
-        #print("alt", name, alt, len(alt))
-
-        if alt[1] == "$":  # epsilon
+        if not alt:  # epsilon
             binding = None
             term = None
         else:
-            prod = alt[0]
-            term = alt[1]
-            terms = alt[2]
-            binding = alt[3]
+            term = alt.term
+            terms = alt.terms
+            binding = alt.bind
 
         if binding:
             bnames = self.getbinding(binding)
@@ -477,9 +347,9 @@ class Emitter(object):
             return (name, [None,], bnames)
 
         args = [self.emitterm(term),]
-        while len(terms) > 1:
-            args.append(self.emitterm(terms[1]))
-            terms = terms[2]
+        while terms:
+            args.append(self.emitterm(terms.term))
+            terms = terms.terms
 
         for arg in args:
             # print("Argument: ", arg)
@@ -501,35 +371,34 @@ class Emitter(object):
         return (name, args, bnames)
 
     def emitterm(self, term):
-        obj = term[1]
+        obj = term.val
         return obj
 
     def getbinding(self, binding):
-        assert(binding[1] == "#")
-        name = binding[2]
-        if binding[3]:
-            names = self.getnames(binding[3])
+        name = binding.bname
+        if binding.names:
+            names = self.getnames(binding.names)
         else:
             names = []
         return [name, ] + names
 
     def getnames(self, names):
-        if names[1] == "$":
+        if not names:
             return []
-        name = names[1]
-        names = names[2]
+        name = names.termname
+        names = names.names
         if names:
             return [name,] + self.getnames(names)
         else:
             return [name, ]
 
     def gettokens(self, toktree):
-        pairs = toktree[2]
+        pairs = toktree[1]
 
         while pairs:
-            name = pairs[1]
-            regex = pairs[2]
-            pairs = pairs[3]
+            name = pairs[0]
+            regex = pairs[1]
+            pairs = pairs[2]
             regex = regex.strip()[1:-1]
             self.tokenmap[name] = Terminal(name, regex)
             self.lexmap.append((name, regex))
@@ -560,8 +429,6 @@ class Emitter(object):
             # print(production, dir(production))
             if production.pclass:
                 binding = production.pclass
-                if binding[0] == "_":  # suppress this production
-                    s += "            return  # production suppressed"
                 # attrs = map(str, zip(binding[1:], variables))
                 attrs = zip(binding[1:], variables)
                 sargs = ''
@@ -580,233 +447,5 @@ class Emitter(object):
 def sanitize(name):
     return re.sub('[^0-9a-zA-Z_]', '', name)
 
-class GrammarObj(object):
-    def __init__(self, *args):
-        self.name = args[0]
-        i = 0
-        for k,v in args[1:]:
-            if k == "_":
-                setattr(self, "_anon{}".format(i), v)
-                i += 1
-            else:
-                setattr(self, k, v)
-        self.attrs = args[1:]
-    def __str__(self):
-        return self.name
-    def __repr__(self):
-        s = self.name + '['
-        for k,v in self.attrs:
-            s += "{}:{}, ".format(k,v)
-        s += ']'
-        return s
-
 def fname(name):
     return "parse{}".format(name)
-
-def ebnf():
-
-    # Declare Nonterminals
-    Spec = Nonterminal("Spec")
-    RootDecl = Nonterminal("RootDecl")
-    TokenDecl = Nonterminal("TokenDecl")
-    TokenPairs = Nonterminal("TokenPairs")
-    GrammarDecl = Nonterminal("GrammarDecl")
-    Decls = Nonterminal("Decls")
-    Decl = Nonterminal("Decl")
-    Term = Nonterminal("Term")
-    Terms = Nonterminal("Terms")
-    Alt = Nonterminal("Alt")
-    Alts = Nonterminal("Alts")
-    Binding = Nonterminal("Binding")
-    Names = Nonterminal("Names")
-
-    # make terminals and lex map
-    def makeTerminals(lex, *args):
-        terms = []
-        while args:
-            name = args[0]
-            regex = args[1]
-            args = args[2:]
-            terms.append(Terminal(name, regex))
-            lex.append((name, regex))
-        return terms
-
-    lex = []
-    equals, pound, epsilon, semicolon, bar, rootkw, tokenkw, grammarkw, string, name = makeTerminals(
-    lex, 'equals', r':=', 'pound', r'#', 'epsilon', '\$', 'semicolon', r';', 'bar', r'\|',\
-    'rootkw', r'\%root', 'tokenkw', r'\%tokens', 'grammarkw', r'\%grammar', 'string', r"(\'|\").*?[^\\]\1", 'name', r'\w+')
-
-    # print(pound.pattern)
-
-    # Declare productions
-    Spec1 = Production(Spec, RootDecl, TokenDecl, GrammarDecl)
-    RootDecl1 = Production(RootDecl, rootkw, name)
-    TokenDecl1 = Production(TokenDecl, tokenkw, TokenPairs)
-    TokenPairs1 = Production(TokenPairs, name, string, TokenPairs)
-    TokenPairs2 = Production(TokenPairs, None)
-    GrammarDecl1 = Production(GrammarDecl, grammarkw, Decls)
-    Decls1 = Production(Decls, Decl, Decls)
-    Decls2 = Production(Decls, None)
-    Decl1 = Production(Decl, name, equals, Alt, Alts, Binding, semicolon)
-    Alt1 = Production(Alt, Term, Terms, Binding)
-    Alt2 = Production(Alt, epsilon)
-    Alts1 = Production(Alts, bar, Alt, Alts)
-    Alts2 = Production(Alts, None)
-    Term1 = Production(Term, name)
-    Term2 = Production(Term, string)
-    Terms1 = Production(Terms, Term, Terms)
-    Terms2 = Production(Terms, None)
-    Binding1 = Production(Binding, pound, name, Names)
-    Binding2 = Production(Binding, None)
-    Names1 = Production(Names, name, Names)
-    Names2 = Production(Names, None)
-
-    Spec.root()
-
-    ebnfgrammar='''
-    %root Spec
-    %tokens
-    pound "#"
-    bar '\|'
-    epsilon "\$"
-    string "(\\'|\\").*?[^\\\\]\\1"
-    name "\w+"
-    %grammar
-
-    Spec := RootDecl TokenDecl GrammarDecl
-          ;
-    RootDecl := '%root' name
-              ;
-    TokenDecl := '%tokens' TokenPairs
-               ;
-    TokenPairs := name string TokenPairs
-                | $
-                ;
-    GrammarDecl := '%grammar' Decls
-                 ;
-    Decls := Decl Decls              # Declarations decl rest
-           | $
-           ;
-    Decl := name ':=' Alt Alts ';'  # Declaration dname _ alt alts _
-          ;
-    Alt := Term Terms Binding       # Alternative term terms bind
-         | epsilon                  # _
-         ;
-    Alts := bar Alt Alts             # Alternatives _ alt alts
-          | $
-          ;
-    Term := name                     # Name val
-          | string                  # String val
-          ;
-    Terms := Term Terms              # Terms term terms
-           | $
-           ;
-    Binding := pound name Names        # Binding _ bname names
-             | $
-             ;
-    Names := name Names              # Names termname names
-           | $
-           ;
-    '''
-
-
-    mathgrammar='''
-    %root E
-
-    %tokens
-    plus "\+"
-    mult "\*"
-    lparen "\("
-    rparen "\)"
-    num "[0-9]+"
-    name "\w+"
-
-    %grammar
-    E := T Ep           # Exp op rhs ;
-    Ep := plus T Ep      # Plus _ op rest
-        | $ ;
-    T := F Tp           # Term op rhs;
-    Tp := mult F Tp      # Mult _ op rest
-        | $ ;
-    F := lparen E rparen      # Paren _ exp _
-       | num           # Num val;
-    '''
-    mathtokens = (
-    ('plus', r'\+'),
-    ('mult', r'\*'),
-    ('lparen', r'\('),
-    ('rparen', r'\)'),
-    ('num', r'[0-9]+'),
-    ('name', r'\w+'),
-    )
-    # Declare Nonterminals and Terminals
-    E = Nonterminal("E")
-    Ep = Nonterminal("E'")
-    T = Nonterminal("T")
-    Tp = Nonterminal("T'")
-    F = Nonterminal("F")
-    plus = Terminal('plus', r'\+')
-    mult = Terminal('mult', r'\*')
-    name = Terminal('name', r'\w')
-    num = Terminal('num', r'[0-9]+')
-    lparen = Terminal('lparen', r'\(')
-    rparen = Terminal('rparen', r'\)')
-    # Declare Productions
-    E1 = Production(E, T, Ep)
-    Ep1 = Production(Ep, plus, T, Ep)
-    Ep2 = Production(Ep, None)
-    T1 = Production(T, F, Tp)
-    Tp1 = Production(Tp, mult, F, Tp)
-    Tp2 = Production(Tp, None)
-    F1 = Production(F, lparen, E, rparen)
-    F2 = Production(F, num)
-
-
-    # p = Parser(lex, ebnfgrammar)
-    p = Parser(lex, ebnfgrammar)
-    s = p.parse(Spec)
-    #print(s)
-    e = Emitter(s, 'Spec')
-    s = '''3
-    +
-    4
-    *
-    (
-    9
-    +
-    2
-    )
-    '''
-
-    # s = "3"
-
-    parse = e.emit()
-
-    # for name,prod in e.namemap.items():
-    #     print(name, prod.first)
-
-    #print(e.parser)
-
-    #print(parse(s))
-
-    text = e.objs + PCLASS + e.parser + EMITTERMAIN
-    # print(e.tokenmap)
-    print(text)
-
-    return text
-
-pfunc ='''
-def main():
-    with open(sys.argv[1]) as f:
-        s = f.read()
-    p = Parser()
-    ast = p.parse(s)
-    e = Emitter(ast)
-    e.emit()
-
-if __name__ == "__main__":
-    main()
-
-'''
-
-ebnf()
