@@ -1,0 +1,83 @@
+%root Decls
+%tokens
+let     'let'
+rec     'rec'
+arrow   '->'
+le      '<'
+gt      '>'
+eq      '='
+lte     '<='
+gte     '>='
+if      'if'
+then    'then'
+else    'else'
+plus    '\+'
+minus   '\-'
+mult    '\*'
+divide  '\/'
+mod     'mod'
+lparen  '\('
+rparen  '\)'
+colon   ':'
+type    'type'
+fun     'fun'
+number  '[0-9]+'
+string  "(\\'|\\").*?[^\\\\]\\1"
+name    '[\w\.]+'
+
+%grammar
+
+Decls := Decl Decls
+        | $
+        ;
+
+Decl := let <rec> lparen name colon name TypeList rparen eq Args Expr Decls
+      | type name eq name [name]
+      ;
+
+TypeList := arrow name <name> TypeList
+          | $
+          ;
+
+Args := fun name arrow Args
+      | $
+      ;
+
+Expr := Expr1 ExprR
+      ;
+
+ExprR := { lt gt eq lte gte } Expr1
+      | $
+      ;
+
+Expr1 := if Expr then Expr else Expr
+       | Expr2 Expr1R
+       ;
+
+Expr1R := { plus minus } Expr2 [{plus minus} Expr2]
+       | $
+       ;
+
+Expr2 := Expr3 Expr2R
+       ;
+
+Expr2R := {mult div mod} Expr3 [{mult div mod} Expr3]
+        | $
+        ;
+
+Expr3 := Expr4 Expr3R
+       ;
+
+Expr3R := Expr4 [Expr4]
+        | $
+        ;
+
+Expr4 := lparen Expr4Paren
+       | name
+       | number
+       | string
+       ;
+
+Expr4Paren := Expr rparen
+           | rparen
+           ;

@@ -11,17 +11,20 @@ class Parser(object):
         raise Parser.ScanError("Lexer Error, line {}: No matching token found. Remaining input: {} ....".format(self.line, self.remaining[:50]))
 
 
-    def __init__(self):
+    def __init__(self, log=False):
         lex = [('whitespace', '\s+'),] + [ x for x in LEXMAP ]
         rules = [ (regex, self.makeHandler(tokenName)) for tokenName, regex in lex ]
         self.scanner = re.Scanner(rules)
         self.line = 1
-        self.log = False
+        self.log = log
 
     def parse(self, s):
         self.toks, self.remaining = self.scanner.scan(s)
         self.trim()
-        return self._parseRoot()
+        res = self._parseRoot()
+        if self.toks:
+            raise Parser.ParseError("Couldn't parse all of input. Next token: ", self.toks[0])
+        return res
 
     def makeHandler(self, token):
         return lambda scanner, string : (token, string)
@@ -83,9 +86,15 @@ class GrammarObj(object):
 
 MAIN='''
 def main():
+    log = False
+    if len(sys.argv) < 2:
+        raise ValueError("Specify input file to parse")
+    elif len(sys.argv) > 2:
+        if sys.argv[2] == "-v":
+            log = True
     with open(sys.argv[1]) as f:
         s = f.read()
-    p = Parser()
+    p = Parser(log)
     ast = p.parse(s)
     print(repr(ast))
 

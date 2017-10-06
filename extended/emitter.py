@@ -491,6 +491,8 @@ class Emitter(object):
     def emitfunc(self, nonterm):
         s = ''
         s += "    def {}(self):\n".format(fname(nonterm.name))
+        s += "        if self.log:\n"
+        s += "            print(\"{}\")\n".format(nonterm.name)
         epsilon = False
         alltoks = set()
         # if isinstance(nonterm, Operator):
@@ -509,7 +511,7 @@ class Emitter(object):
                 s += "        while self.next() in {}:\n".format(tokset)
                 epsilon = True  # repeats can be taken 0 times; equivalent to an episilon production
             elif isinstance(nonterm, Set):
-                return self.emitset(nonterm)
+                return self.emitset(s, nonterm)
             else:
                 s += "        if self.next() in {}:\n".format(tokset)
             for i,term in enumerate(production.prod):
@@ -543,25 +545,25 @@ class Emitter(object):
 
         self.parser += s
 
-    def emitset(self, nontern):
-            alltoks = set()
-            for term in nonterm.args:
-                if term in self.tokenmap:
-                    term = self.tokenmap[term]
-                else:
-                    term = self.namemap[term]
-                firsts = term.first
-                tokset = "(\"{}\",)".format('\", \"'.join([tok.name for tok in firsts]))
-                alltoks.update(firsts)
-                s += "        if self.next() in {}:\n".format(tokset)
-                if isinstance(term, Nonterminal):
-                    s += "            return self.{}()\n".format(fname(sanitize(term.name)))
-                else:
-                    s += "            return self.consume(\"{}\")\n".format(term.name)
-            alltokset = "(\"{}\",)".format('\", \"'.join([tok.name for tok in alltoks]))
-            s += "        self.parsefail({}, self.next())\n\n".format(alltokset)
-            self.parser += s
-            return
+    def emitset(self, s, nonterm):
+        alltoks = set()
+        for term in nonterm.args:
+            if term in self.tokenmap:
+                term = self.tokenmap[term]
+            else:
+                term = self.namemap[term]
+            firsts = term.first
+            tokset = "(\"{}\",)".format('\", \"'.join([tok.name for tok in firsts]))
+            alltoks.update(firsts)
+            s += "        if self.next() in {}:\n".format(tokset)
+            if isinstance(term, Nonterminal):
+                s += "            return self.{}()\n".format(fname(sanitize(term.name)))
+            else:
+                s += "            return self.consume(\"{}\")\n".format(term.name)
+        alltokset = "(\"{}\",)".format('\", \"'.join([tok.name for tok in alltoks]))
+        s += "        self.parsefail({}, self.next())\n\n".format(alltokset)
+        self.parser += s
+        return
 
 def sanitize(name):
     return re.sub('[^0-9a-zA-Z_]', '', name)
