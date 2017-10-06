@@ -1,4 +1,4 @@
-
+from stock import PCLASS, MAIN
 import re, sys
 from emitter import Emitter
 
@@ -91,7 +91,7 @@ class Names(GrammarObj):
         super().__init__(*args)
         self.name = "Names"
 
-LEXMAP = [('pound', '#'), ('bar', '\|'), ('epsilon', '\$'), ('lrepeat', '\['), ('rrepeat', '\]'), ('lset', '<'), ('rset', '>'), ('lopt', '{'), ('ropt', '}'), ('string', '(\\\'|\\").*?[^\\\\]\\1'), ('name', '\w+'), ('%root', '%root'), ('%tokens', '%tokens'), ('%grammar', '%grammar'), (':=', ':='), (';', ';')]
+LEXMAP = [('pound', '#'), ('bar', '\|'), ('epsilon', '\$'), ('lrepeat', '\['), ('rrepeat', '\]'), ('lset', '{'), ('rset', '}'), ('lopt', '<'), ('ropt', '>'), ('string', '(\\\'|\\").*?[^\\\\]\\1'), ('name', '\w+'), ('%root', '%root'), ('%tokens', '%tokens'), ('%grammar', '%grammar'), (':=', ':='), (';', ';')]
 
 
 class Parser(object):
@@ -286,7 +286,8 @@ def main():
     ast = p.parse(s)
     e = Emitter(ast)
     e.emit()
-    print(e.parser)
+    text = e.objs + PCLASS + e.parser + MAIN
+    print(text)
 
 if __name__ == "__main__":
     main()
