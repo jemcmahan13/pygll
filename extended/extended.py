@@ -286,6 +286,7 @@ def main():
     ast = p.parse(s)
     e = Emitter(ast)
     e.emit()
+    print(e.parser)
 
 if __name__ == "__main__":
     main()

@@ -1,5 +1,6 @@
 from stock import GOBJ
 import re
+from itertools import count
 
 log = False
 
@@ -215,10 +216,11 @@ class Production(object):
     def __str__(self):
         return "{} => {}".format(self.head, ' '.join(map(str, self.prod)))
 
-class Operator(object):
-    def __init__(self, exps):
-        self.exps = exps
-
+class Operator(Nonterminal):
+    def __init__(self, name, *args):
+        super().__init__(name)
+        self.args = args
+        self.name = name
 class Repeat(Operator):
     pass
 class Set(Operator):
@@ -234,7 +236,12 @@ class Emitter(object):
         self.objs = GOBJ  # put named class definitions here
         self.tokenmap = {}  # maps string to Terminal object
         self.namemap = {}  # maps string to Nonterminal object
+        self.operators = []  # maps string name to Operator object
         self.lexmap = []  # (name, regex) pairs for lexer
+        self.itercount = count(0)  # need unique number for anonymous variables
+
+    def count(self):
+        return next(self.itercount)
 
     def findterms(self, root):
         # Find the terminals, nonterminals, and productions in the grammar
@@ -283,6 +290,7 @@ class Emitter(object):
             prods += self.emitdecl(tree.decl)
             tree = tree.rest
 
+        prods += self.operators
         # Now that all terminal and nonterminals seen and created, instantiate productions
         allmap = self.namemap.copy()
         allmap.update(self.tokenmap)
@@ -291,6 +299,12 @@ class Emitter(object):
         for name, args, binding in prods:
             # print("Generating production for", name, "with", args)
             # print(self.namemap)
+            # for i, term in enumerate(args):
+            #     if isinstance(term, Operator):
+            #         nt = Nonterminal("anonymousNonterminal{}_{}".format(self.count())
+            #         self.namemap[nt.name] = nt
+            #         self.allmap[nt.name] = nt
+            #         p = Production(self.namemap[term.arg[0]], *[allmap[x] for x in term.args[1:]])
 
             x = Production(self.namemap[name], *[allmap[x] for x in args])
             if binding:
@@ -371,13 +385,25 @@ class Emitter(object):
     def emitexp(self, exp):
         if exp.name == "exprepeat":
             exps = self.emitexps(exp.exps)
-            res = Repeat(exps)
+            name = "anonymousNonterminal{}".format(self.count())
+            res = name
+            self.namemap[name] = Repeat(name, exps)
+            self.operators.append((name, exps, None))
+            # self.operators[res.name] = res  # track that this nonterminal is a special operator
         elif exp.name == "expset":
             exps = self.emitexps(exp.exps)
-            res = Set(exps)
+            name = "anonymousNonterminal{}".format(self.count())
+            res = name
+            self.namemap[name] = Set(name, exps)
+            self.operators.append((name, exps, None))
+            # self.operators[res.name] = Set(name, exps)
         elif exp.name == "eopt":
             exps = self.emitexps(exp.exps)
-            res = Optional(exps)
+            name = "anonymousNonterminal{}".format(self.count())
+            res = name
+            self.namemap[name] = Optional(name, exps)
+            self.operators.append((name, exps, None))
+            # self.operators[res.name] = Optional(name, exps)
         else:  # expression was just a term
             res = self.emitterm(exp)
             self.register((res,))
@@ -436,11 +462,30 @@ class Emitter(object):
             self.lexmap.append((name, regex))
             # print("Regex: ", name, regex)
 
+
+    # def emitoperator(self, op):
+    #     print(op, op.rules, type(op))
+    #     print([type(arg) for arg in op.args[0]])
+    #     if isinstance(op, Repeat):
+    #         s = ''
+    #         for arg in op.args:
+    #             if isinstance(arg, Nonterminal):
+    #                 s += "            var{}_{} = self.{}()\n".format(i, cleanname, fname(cleanname))
+    #             else:
+    #                 s += "            var{}_{} = self.consume(\"{}\")\n".format(i, cleanname, term.name)
+    #     elif isinstance(op, Optional):
+    #         pass
+    #     elif isinstance(op, Set):
+    #         pass
+
     def emitfunc(self, nonterm):
         s = ''
         s += "    def {}(self):\n".format(fname(nonterm.name))
         epsilon = False
         alltoks = []
+        # if isinstance(nonterm, Operator):
+        #     self.parser += self.emitoperator(nonterm)
+        #     return
         for rule in nonterm.rules:
             epsilon |= None in rule[0]
             firsts = rule[0].difference(set((None,)))
@@ -450,7 +495,23 @@ class Emitter(object):
             variables = []
             if not production.prod[0]:
                 continue
-            s += "        if self.next() in {}:\n".format(tokset)
+            print(nonterm, type(nonterm))
+            if isinstance(nonterm, Repeat):
+                s += "        while self.next() in {}:\n".format(tokset)
+            elif isinstance(nonterm, Set):
+                print("---->", nonterm, nonterm.args)
+                for term in nonterm.args:
+                    firsts = term.first
+                    tokset = "(\"{}\",)".format('\", \"'.join([tok.name for tok in firsts]))
+                    s += "        if self.next() in {}\n".format(tokset)
+                    if isinstance(term, Nonterminal):
+                        s += "            return self.{}()\n".format(fname(sanitize(term.name)))
+                    else:
+                        s += "            return self.consume(\"{}\")\n".format(term.name)
+                self.parser += s
+                return
+            else:
+                s += "        if self.next() in {}:\n".format(tokset)
             for i,term in enumerate(production.prod):
                 cleanname = sanitize(term.name)
                 variables.append("var{}_{}".format(i, cleanname))
@@ -474,7 +535,10 @@ class Emitter(object):
         if epsilon:
             s += "        return  # epsilon case\n\n"
         else:  # error case
-            s += "        self.parsefail({}, self.next())\n\n".format(alltoks)
+            if isinstance(nonterm, Optional):
+                s += "        return  # this production declared as optional\n\n"
+            else:
+                s += "        self.parsefail({}, self.next())\n\n".format(alltoks)
 
         self.parser += s
 
