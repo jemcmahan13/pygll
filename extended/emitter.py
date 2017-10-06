@@ -296,7 +296,11 @@ class Emitter(object):
             prods += self.emitdecl(tree.decl)
             tree = tree.rest
 
-        prods += self.operators
+        # prods += self.operators
+        for op in self.operators:
+            prods.append(op)
+            if op[0] in self.namemap and isinstance(self.namemap[op[0]], Optional):
+                prods.append((op[0], [None,], op[2]))
         # Now that all terminal and nonterminals seen and created, instantiate productions
         allmap = self.namemap.copy()
         allmap.update(self.tokenmap)
@@ -548,11 +552,11 @@ class Emitter(object):
         if epsilon:
             s += "        return  # epsilon case\n\n"
         else:  # error case
-            if isinstance(nonterm, Optional):
-                s += "        return  # this production declared as optional\n\n"
-            else:
-                alltokset = "(\"{}\",)".format('\", \"'.join([tok.name for tok in alltoks]))
-                s += "        self.parsefail({}, self.next())\n\n".format(alltokset)
+            # if isinstance(nonterm, Optional):
+            #     s += "        return  # this production declared as optional\n\n"
+            # else:
+            alltokset = "(\"{}\",)".format('\", \"'.join([tok.name for tok in alltoks]))
+            s += "        self.parsefail({}, self.next())\n\n".format(alltokset)
 
         self.parser += s
 

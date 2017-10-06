@@ -14,4 +14,4 @@ name "\w+"
 E := T [ { plus minus } E ]   # Exp op rest;
 T := F [ { mult divide } F ]  # Term op rest;
 F := lparen E rparen          # Paren _ exp _
-   | num                      # Num val;
+   | < minus > num                      # Num sign val;
