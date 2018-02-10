@@ -52,3 +52,52 @@ Curly braces (`{` and `}`) indicate that exactly one of the enclosed list should
 #### Repetition
 
 Square brackets (`[` and `]`) indicate that the enclosed portion of the production should be parsed 0 or more times. Note that this is only for *zero or more*, not one or more. `[name]` will parse 0 or more names, while `name [name]` will parse 1 or more names.
+
+
+# Example Grammars
+
+## Simple Math
+
+```
+%root E
+
+%tokens
+plus "\+"
+mult "\*"
+lparen "\("
+rparen "\)"
+num "[0-9]+"
+name "\w+"
+
+%grammar
+E := T Ep           # Exp op rhs ;
+Ep := plus T Ep      # Plus _ op rest
+    | $ ;
+T := F Tp           # Term op rhs;
+Tp := mult F Tp      # Mult _ op rest
+    | $ ;
+F := lparen E rparen      # Paren _ exp _
+    | num           # Num val;
+```
+
+## Simple Math with operators
+
+```
+%root E
+
+%tokens
+plus "\+"
+minus "\-"
+mult "\*"
+divide "\/"
+lparen "\("
+rparen "\)"
+num "[0-9]+"
+name "\w+"
+
+%grammar
+E := T [ { plus minus } E ]   # Exp op rest;
+T := F [ { mult divide } F ]  # Term op rest;
+F := lparen E rparen          # Paren _ exp _
+   | < minus > num                      # Num sign val;
+```
