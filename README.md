@@ -1,14 +1,11 @@
 
-A python-based RDP parser generator.
+A python-based recursive-descent-parser parser generator.
 
-basegenerator: Files for generating ll.py (the parser-generator).
-Uses a primitive implementation to parse an EBNF spec, then generates a parser
-from that (ll.py).
+I made this because I wanted a parser generator with two characteristics: 1) It takes in an EBNF grammar; 2) It outputs human-readable Python code. Other than that and a few enhancements for convenience, I wanted it to be as simple as possible. I couldn't find anything to my satisfaction, so here we are.
 
-parsergenerator: The files to use the parser generator.
-ll.py contains the parser that parser ebnf grammar files.
-stock.py contains boilerplate code for an emitted parser.
-emitter.py contains the code to emit a parser from an AST.
+
+# Usage
+
 
 
 # Grammar format
@@ -16,8 +13,6 @@ Grammars are expected in an EBNF file consisting of three directives:
 * `%root` specifying which production is the root production;
 * `%tokens`, followed by a list of token names and strings;
 * `%grammar`, followed by a list of grammar productions.
-
-Comments are single-line, beginning with `#`.
 
 
 ## Tokens
@@ -36,6 +31,21 @@ The `%grammar` directive is followed by a list of grammar nonterminals. Each non
 Each production consists of a list of terminals and nonterminals
 
 The epsilon production is indicated with a dollar sign (`$`).
+
+### Accessing Parsed Elements
+
+#### A list of tuples are stored in every parse element in `attrs`. Each tuple contains (name, parse element) for the terminals and nonterminals encountered in the production.
+
+#### Naming terminals and nonterminals
+
+A list of names can be given for a production, which are applied to parse elements after parsing. This makes the produced AST easier to use, allowing for object-style `element.name` access instead of indexing into the `attrs` array.
+
+After a production, a pound sign (`#`) indicates a sequence of names to use for the parsed elements. Underscore (`_`) can be used as a "don't care." The first name gives a name to the derivation; following names are applied in order to the terminals and nonterminals in the derivation.
+
+For example,
+`E := Term '+' Term Rest  # Plus lhs _ rhs remaining`
+will name the production `Plus`, the first term `lhs`, throw away the plus sign, name the second term `rhs`, and name everything under rest `remaining`.
+
 
 ### Special operators
 
@@ -101,3 +111,18 @@ T := F [ { mult divide } F ]  # Term op rest;
 F := lparen E rparen          # Paren _ exp _
    | < minus > num                      # Num sign val;
 ```
+
+
+# Notes
+
+basegenerator: Files for generating ll.py (the parser-generator).
+Uses a primitive implementation to parse an EBNF spec, then generates a parser
+from that (ll.py).
+
+parsergenerator: The files to use the parser generator.
+ll.py contains the parser that parses ebnf grammar files.
+stock.py contains boilerplate code for an emitted parser.
+emitter.py contains the code to emit a parser from an AST.
+
+ll.py (extended.py): the parser for EBNF files
+emitter.py: generates a parser from an AST

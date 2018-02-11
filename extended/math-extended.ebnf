@@ -12,6 +12,6 @@ name "\w+"
 
 %grammar
 E := T [ { plus minus } E ]   # Exp op rest;
-T := F [ { mult divide } F ]  # Term op rest;
+T := F [ { mult divide } T ]  # Term op rest;
 F := lparen E rparen          # Paren _ exp _
    | < minus > num                      # Num sign val;
