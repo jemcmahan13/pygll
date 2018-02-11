@@ -6,7 +6,15 @@ I made this because I wanted a parser generator with two characteristics: 1) It 
 
 # Usage
 
+`python ll.py ebnf_file > parser.py`
 
+The parser can then be used as follows:
+
+```
+from parser import Parser
+p = Parser()
+ast = p.parse(inputstring)
+```
 
 # Grammar format
 Grammars are expected in an EBNF file consisting of three directives:
@@ -34,11 +42,12 @@ The epsilon production is indicated with a dollar sign (`$`).
 
 ### Accessing Parsed Elements
 
-#### A list of tuples are stored in every parse element in `attrs`. Each tuple contains (name, parse element) for the terminals and nonterminals encountered in the production.
+#### Default
+A list of tuples are stored in every parse element in `attrs`. Each tuple contains (name, parse element) for the terminals and nonterminals encountered in the production.
 
 #### Naming terminals and nonterminals
 
-A list of names can be given for a production, which are applied to parse elements after parsing. This makes the produced AST easier to use, allowing for object-style `element.name` access instead of indexing into the `attrs` array.
+A list of names can be given for a production, which are applied to parse elements after parsing. This makes the produced AST easier to use, allowing for object-style `name.element` access instead of indexing into the `attrs` array.
 
 After a production, a pound sign (`#`) indicates a sequence of names to use for the parsed elements. Underscore (`_`) can be used as a "don't care." The first name gives a name to the derivation; following names are applied in order to the terminals and nonterminals in the derivation.
 
