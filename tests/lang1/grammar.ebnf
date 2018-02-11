@@ -26,9 +26,13 @@ Statements := Statement [Statement]
 
 Statement := name '=' Expression ';'			# Assignment name _ expr _
     	   | if Expression then '{' Statements '}' OptionalElse
-	   # Condition _ cond _ _ truebanch _ elsebranch
-	   | print name	';'   		  		# Print _ name _
+	   # Condition _ cond _ _ truebranch _ elsebranch
+	   | print Expression ';'   		  		# Print _ name _
 	   ;
+
+OptionalElse := else '{' Statements '}'			# Else _ _ stmts _
+	      | $
+	      ;
 
 Expression := ExpMath ExpressionR
 	    ;
@@ -37,21 +41,22 @@ ExpressionR := { lt gt leq geq equal } Expression	# ExpR op exp
 	     | $
 	     ;
 
-ExpMath := ExpMult ExpMathR
+ExpMath := ExpMult ExpMathR				# ExpMath left right
 	 ;
 
-ExpMathR := { plus minus } ExpMath
+ExpMathR := { plus minus } ExpMath			# ExpMath op rest
 	 | $
 	 ;
 
-ExpMult := ExpEnd ExpMultR
+ExpMult := ExpEnd ExpMultR				# ExpMult left right
 	 ;
 
-ExpMultR := { mult divide } ExpMult
+ExpMultR := { mult divide } ExpMult			# ExpMultR op rest
 	 | $
 	 ;
 
 ExpEnd := '\(' Expression '\)'
 	| number
+	| name
 	;
 
