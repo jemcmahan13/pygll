@@ -74,8 +74,13 @@ class Nonterminal(GrammarTerm):
         if self._first:
             return self._first
         first = set()
-        for prod in self.productions:
-            first.update(prod.first)
+        if isinstance(self, Set):
+            for prod in self.productions:
+                for p in prod.prod:
+                    first.update(p.first)
+        else:
+            for prod in self.productions:
+                first.update(prod.first)
         self._first = first
         return first
 
@@ -507,20 +512,33 @@ class Emitter(object):
             variables = []
             if not production.prod[0]:
                 continue
-            if isinstance(nonterm, Repeat):
-                s += "        while self.next() in {}:\n".format(tokset)
-                epsilon = True  # repeats can be taken 0 times; equivalent to an episilon production
-            elif isinstance(nonterm, Set):
+            if isinstance(nonterm, Set):
                 return self.emitset(s, nonterm)
             else:
                 s += "        if self.next() in {}:\n".format(tokset)
-            for i,term in enumerate(production.prod):
+                
+            if isinstance(nonterm, Repeat):
+                if len(production.prod) > 1:
+                    raise Exception("Repeat operator can only be applied to a single terminal or nonterminal")
+                term = production.prod[0]
                 cleanname = sanitize(term.name)
-                variables.append("var{}_{}".format(i, cleanname))
+                variables.append("var{}_{}".format(0, cleanname))
+                s += "            var0_{} = []\n".format(cleanname)
+                s += "            while self.next() in {}:\n".format(tokset)
                 if isinstance(term, Nonterminal):
-                    s += "            var{}_{} = self.{}()\n".format(i, cleanname, fname(cleanname))
+                    s += "                var0_{}.append(self.{}())\n".format(cleanname, fname(cleanname))
                 else:
-                    s += "            var{}_{} = self.consume(\"{}\")\n".format(i, cleanname, term.name)
+                    s += "                var0_{}.append(self.consume(\"{}\"))\n".format(cleanname, term.name)
+                epsilon = True  # repeats can be taken 0 times; equivalent to an episilon production
+            else:
+                for i,term in enumerate(production.prod):
+                    cleanname = sanitize(term.name)
+                    variables.append("var{}_{}".format(i, cleanname))
+                    if isinstance(term, Nonterminal):
+                        s += "            var{}_{} = self.{}()\n".format(i, cleanname, fname(cleanname))
+                    else:
+                        s += "            var{}_{} = self.consume(\"{}\")\n".format(i, cleanname, term.name)
+
             # print(production, dir(production))
             if production.pclass:
                 binding = production.pclass
