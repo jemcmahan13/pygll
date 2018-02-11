@@ -1,0 +1,57 @@
+%root Porgram
+
+%tokens
+if	'if'
+then	'then'
+else	'else'
+print	'print'
+lt	'<'
+gt	'>'
+leq	'<='
+geq	'>='
+equal	'=='
+plus	'\+'
+minus	'\-'
+mult	'\*'
+divide	'\/'
+number	'[0-9]+'
+name	'\w+'
+
+%grammar
+Program := Statements
+	 ;
+
+Statements := Statement [Statement]
+	    ;
+
+Statement := name '=' Expression ';'			# Assignment name _ expr _
+    	   | if Expression then '{' Statements '}' OptionalElse
+	   # Condition _ cond _ _ truebanch _ elsebranch
+	   | print name	';'   		  		# Print _ name _
+	   ;
+
+Expression := ExpMath ExpressionR
+	    ;
+
+ExpressionR := { lt gt leq geq equal } Expression	# ExpR op exp
+	     | $
+	     ;
+
+ExpMath := ExpMult ExpMathR
+	 ;
+
+ExpMathR := { plus minus } ExpMath
+	 | $
+	 ;
+
+ExpMult := ExpEnd ExpMultR
+	 ;
+
+ExpMultR := { mult divide } ExpMult
+	 | $
+	 ;
+
+ExpEnd := '\(' Expression '\)'
+	| number
+	;
+

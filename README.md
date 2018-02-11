@@ -43,18 +43,18 @@ The epsilon production is indicated with a dollar sign (`$`).
 ### Accessing Parsed Elements
 
 #### Default
-A list of tuples are stored in every parse element in `attrs`. Each tuple contains (name, parse element) for the terminals and nonterminals encountered in the production.
+
+By default, the parser will return nested tuples. Navigating this can get messy, so it's recommended to name the components of your productions.
 
 #### Naming terminals and nonterminals
 
-A list of names can be given for a production, which are applied to parse elements after parsing. This makes the produced AST easier to use, allowing for object-style `name.element` access instead of indexing into the `attrs` array.
+A list of names can be given for a production, which are applied to parse elements after parsing. This makes the produced AST easier to use, allowing for object-style `name.element` access instead of indexing into tuples repeatedly.
 
 After a production, a pound sign (`#`) indicates a sequence of names to use for the parsed elements. Underscore (`_`) can be used as a "don't care." The first name gives a name to the derivation; following names are applied in order to the terminals and nonterminals in the derivation.
 
 For example,
 `E := Term '+' Term Rest  # Plus lhs _ rhs remaining`
 will name the production `Plus`, the first term `lhs`, throw away the plus sign, name the second term `rhs`, and name everything under rest `remaining`.
-
 
 ### Special operators
 
@@ -135,3 +135,9 @@ emitter.py contains the code to emit a parser from an AST.
 
 ll.py (extended.py): the parser for EBNF files
 emitter.py: generates a parser from an AST
+
+
+# FAQ
+
+### Will ambiguities in my grammar be detected?
+Not at the moment, no. Productions are checked in the order written, so this might result in certain production never being taken and then later parse errors. Be careful when writing your grammar.
