@@ -122,45 +122,45 @@ name	'\w+'
 
 %grammar
 Program := Statements
-	     ;
+     	 ;
 
 Statements := Statement [Statement]
-	        ;
+	    ;
 
-Statement := name '=' Expression ';'			                    # Assignment name _ expr _
+Statement := name '=' Expression ';'			            # Assignment name _ expr _
     	   | if Expression then '{' Statements '}' OptionalElse     # Condition _ cond _ _ truebranch _ elsebranch
-	       | print Expression ';'   		  		                # Print _ expr _
-	       ;
+	   | print Expression ';'   		  		    # Print _ expr _
+	   ;
 
 OptionalElse := else '{' Statements '}'			# Else _ _ stmts _
-	          | $
-	          ;
+	      | $
+	      ;
 
-Expression := ExpMath ExpressionR               # Exp left right
-	        ;
+Expression := ExpMath ExpressionR			# Exp left right
+	    ;
 
 ExpressionR := { lt gt leq geq equal } Expression	# ExpR op exp
-	         | $
-	         ;
+	     | $
+	     ;
 
 ExpMath := ExpMult ExpMathR				# ExpMath left right
-	     ;
+	 ;
 
 ExpMathR := { plus minus } ExpMath			# ExpMath op rest
-	      | $
-	      ;
+	  | $
+	  ;
 
 ExpMult := ExpEnd ExpMultR				# ExpMult left right
-	     ;
+	 ;
 
 ExpMultR := { mult divide } ExpMult			# ExpMultR op rest
-	      | $
-	      ;
+	  | $
+	  ;
 
 ExpEnd := '\(' Expression '\)'          # Paren _ exp _
-	    | number                        # Num num
-	    | name                          # Name name
-	    ;
+        | number                        # Num num
+	| name                          # Name name
+	;
 ```
 
 
