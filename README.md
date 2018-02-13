@@ -1,7 +1,7 @@
 
 A python-based recursive descent parser generator for LL(1) grammars.
 
-I made this because I wanted a parser generator with two characteristics: 1) It takes in an EBNF grammar; 2) It outputs human-readable Python code that one can use. Other than that and a few enhancements for convenience, I wanted it to be as simple as possible. I couldn't find anything to my satisfaction, so here we are.
+This parser generator has two salient two characteristics: 1) It takes in an EBNF grammar; 2) It outputs human-readable Python code that one can edit and use. Other than that and a few enhancements for convenience, I wanted it to be as simple as possible.
 
 
 # Usage
