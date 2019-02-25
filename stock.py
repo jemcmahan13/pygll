@@ -47,6 +47,8 @@ class Parser(object):
     def consume(self, tok):
         if not self.toks and self.remaining:
             self.scanfail()
+        if len(self.toks) == 0:
+            self.parsefail(tok, 'EOF')
         token,match = self.toks.pop(0)
         if self.log:
             print("consuming {}:{}".format(tok, match))

@@ -503,6 +503,8 @@ class Emitter(object):
         # if isinstance(nonterm, Operator):
         #     self.parser += self.emitoperator(nonterm)
         #     return
+        if len(nonterm.rules) == 0:
+            raise Exception("No definition for nonterminal {}".format(nonterm))
         for rule in nonterm.rules:
             epsilon |= None in rule[0]
             firsts = rule[0].difference(set((None,)))
